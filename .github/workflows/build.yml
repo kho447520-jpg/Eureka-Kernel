@@ -1,7 +1,7 @@
 name: Build Eureka Kernel R9.2
 
 on:
-  workflow_dispatch: # Giúp hiển thị nút Run workflow màu xanh
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,17 +9,17 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install Dependencies
       run: |
         sudo apt update
         sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev libncurses5-dev libncursesw5-dev squashfs-tools
 
-    - name: Download Eureka Source (Branch R9.2_rom)
+    - name: Download EXACT Eureka R9.2 Source
       run: |
-        # Tự động tải đúng nhánh R9.2_rom từ kho lưu trữ gốc
-        git clone https://github.com -b R9.2_rom $GITHUB_WORKSPACE/kernel-source
+        # Lệnh này ép buộc GitHub chỉ tải duy nhất nhánh R9.2_rom, loại bỏ hoàn toàn R24
+        git clone --branch R9.2_rom --single-branch https://github.com $GITHUB_WORKSPACE/kernel-source
 
     - name: Download Vortex Clang Toolchain
       run: |
