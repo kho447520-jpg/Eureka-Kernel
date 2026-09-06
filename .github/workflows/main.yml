@@ -23,11 +23,11 @@ jobs:
         repository: eurekadevelopment/Vortex-Clang
         path: vortex-clang
 
-    # 3. Tải trực tiếp mã nguồn KernelSU Next thay vì chạy tập lệnh cài đặt
+    # 3. Tải chính xác mã nguồn KernelSU Next từ kho chứa gốc của rifsxd
     - name: Checkout KernelSU Next Source
       uses: actions/checkout@v4
       with:
-        repository: KernelSU-Next/KernelSU-Next
+        repository: rifsxd/KernelSU-Next
         ref: next
         path: kernel-source/drivers/kernelsu
 
