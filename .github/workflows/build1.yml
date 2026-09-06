@@ -8,19 +8,18 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4 # Nâng cấp lên v4 để sửa lỗi Node.js 20 bị khai tử
+    # Bước này ép GitHub Actions bốc chính xác duy nhất nhánh R9.2_rom của Eureka về ngay từ đầu
+    - name: Checkout Eureka Source (Branch R9.2_rom)
+      uses: actions/checkout@v4
+      with:
+        repository: eurekadevelopment/Eureka-Kernel-Exynos7885-Q-R-S
+        ref: R9.2_rom
+        path: kernel-source
 
     - name: Install Dependencies
       run: |
         sudo apt update
         sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev libncurses5-dev libncursesw5-dev squashfs-tools
-
-    - name: Download Eureka Source
-      run: |
-        # Đã chuyển sang tải nhánh mặc định ổn định của kho chứa.
-        # Nếu build thành công, bạn có thể đổi tên nhánh sau chữ -b bên dưới nếu cần.
-        git clone https://github.com -b master $GITHUB_WORKSPACE/kernel-source
 
     - name: Download Vortex Clang Toolchain
       run: |
