@@ -1,4 +1,4 @@
-name: Build Eureka Kernel Android 13
+name: Build Eureka Kernel Android 13 + KernelSU Next
 
 on:
   workflow_dispatch:
@@ -8,28 +8,40 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # Bước 1: Ép hệ thống tải chính xác nhánh R24U tương thích hoàn toàn với Android 13
-    - name: Checkout Eureka Source (Branch R24U)
+    # 1. Tải mã nguồn Eureka Kernel (Nhánh R24U cho Android 13)
+    - name: Checkout Eureka Source
       uses: actions/checkout@v4
       with:
         repository: eurekadevelopment/Eureka-Kernel-Exynos7885-Q-R-S
         ref: R24U
         path: kernel-source
 
-    # Bước 2: Cài đặt các công cụ biên dịch bắt buộc
+    # 2. Tải Trình biên dịch Vortex Clang
+    - name: Checkout Vortex Clang Toolchain
+      uses: actions/checkout@v4
+      with:
+        repository: eurekadevelopment/Vortex-Clang
+        path: vortex-clang
+
+    # 3. Cài đặt các gói công cụ phụ thuộc bắt buộc
     - name: Install Dependencies
       run: |
         sudo apt update
         sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev libncurses5-dev libncursesw5-dev squashfs-tools
 
-    # Bước 3: Tải trình biên dịch Vortex Clang (bảo vệ link bằng biến số tránh lỗi sập hệ thống)
-    - name: Download Vortex Clang Toolchain
+    # 4. Tích hợp trực tiếp mã nguồn KernelSU Next vào Kernel Tree
+    - name: Integrate KernelSU Next
       run: |
-        DOMAIN="https://github.com"
-        REPO_PATH="eurekadevelopment/Vortex-Clang.git"
-        git clone "${DOMAIN}/${REPO_PATH}" --depth=1 $GITHUB_WORKSPACE/vortex-clang
+        cd $GITHUB_WORKSPACE/kernel-source
+        
+        # Tải mã nguồn của kịch bản cài đặt nhanh từ KernelSU Next
+        curl -LSs "https://githubusercontent.com" | bash -s next
+        
+        # Ép cấu hình bật mặc định các tính năng của KernelSU vào file defconfig
+        echo "CONFIG_KSU=y" >> arch/arm64/configs/exynos7885_defconfig
+        echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/exynos7885_defconfig
 
-    # Bước 4: Tiến hành cấu hình và biên dịch Kernel cho chip Exynos 7885
+    # 5. Tiến hành biên dịch Kernel
     - name: Build Kernel Binary
       run: |
         cd $GITHUB_WORKSPACE/kernel-source
@@ -44,9 +56,9 @@ jobs:
         make exynos7885_defconfig
         make CC=clang HOSTCC=clang-14 LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump -j$(nproc)
 
-    # Bước 5: Đóng gói và xuất file Kernel đầu ra để bạn tải về
+    # 6. Đóng gói xuất file Kernel đầu ra lên GitHub để tải về
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Eureka-Kernel-Android13-Image
+        name: Eureka-Kernel-A13-KernelSU-Next
         path: kernel-source/arch/arm64/boot/Image.gz-dtb
