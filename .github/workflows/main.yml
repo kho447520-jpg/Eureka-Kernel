@@ -1,0 +1,74 @@
+name: Build Eureka Kernel Android 13 + KernelSU Next
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    # 1. Tải mã nguồn Eureka Kernel (Nhánh R24U cho Android 13)
+    - name: Checkout Eureka Source
+      uses: actions/checkout@v4
+      with:
+        repository: eurekadevelopment/Eureka-Kernel-Exynos7885-Q-R-S
+        ref: R24U
+        path: kernel-source
+
+    # 2. Tải Trình biên dịch Vortex Clang
+    - name: Checkout Vortex Clang Toolchain
+      uses: actions/checkout@v4
+      with:
+        repository: eurekadevelopment/Vortex-Clang
+        path: vortex-clang
+
+    # 3. Tải trực tiếp mã nguồn KernelSU Next thay vì chạy tập lệnh cài đặt
+    - name: Checkout KernelSU Next Source
+      uses: actions/checkout@v4
+      with:
+        repository: KernelSU-Next/KernelSU-Next
+        ref: next
+        path: kernel-source/drivers/kernelsu
+
+    # 4. Cài đặt các gói công cụ phụ thuộc bắt buộc
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev libncurses5-dev libncursesw5-dev squashfs-tools
+
+    # 5. Khai báo trình điều khiển KernelSU Next vào hệ thống xây dựng nhân
+    - name: Configure KernelSU Next
+      run: |
+        cd $GITHUB_WORKSPACE/kernel-source
+        
+        # Liên kết driver kernelsu vào Makefile của thư mục drivers nếu chưa có
+        if ! grep -q "kernelsu" drivers/Makefile; then
+          echo "obj-y += kernelsu/" >> drivers/Makefile
+        fi
+        
+        # Ép cấu hình bật mặc định các tính năng của KernelSU Next vào file defconfig
+        echo "CONFIG_KSU=y" >> arch/arm64/configs/exynos7885_defconfig
+        echo "CONFIG_KSU_NEXT=y" >> arch/arm64/configs/exynos7885_defconfig
+
+    # 6. Tiến hành biên dịch Kernel
+    - name: Build Kernel Binary
+      run: |
+        cd $GITHUB_WORKSPACE/kernel-source
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CLANG_PATH=$GITHUB_WORKSPACE/vortex-clang/bin
+        export PATH=$CLANG_PATH:$PATH
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        
+        make clean && make mrproper
+        make exynos7885_defconfig
+        make CC=clang HOSTCC=clang-14 LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump -j$(nproc)
+
+    # 7. Đóng gói xuất file Kernel đầu ra lên GitHub để tải về
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Eureka-Kernel-A13-KernelSU-Next
+        path: kernel-source/arch/arm64/boot/Image.gz-dtb
