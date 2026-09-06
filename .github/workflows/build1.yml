@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # Bước này ép GitHub Actions bốc chính xác duy nhất nhánh R9.2_rom của Eureka về ngay từ đầu
     - name: Checkout Eureka Source (Branch R9.2_rom)
       uses: actions/checkout@v4
       with:
@@ -23,7 +22,10 @@ jobs:
 
     - name: Download Vortex Clang Toolchain
       run: |
-        git clone https://github.com --depth=1 $GITHUB_WORKSPACE/vortex-clang
+        # Chia nhỏ link để tránh bị hệ thống GitHub vô tình chặn hoặc cắt cụt đường dẫn
+        DOMAIN="https://github.com"
+        REPO_PATH="eurekadevelopment/Vortex-Clang.git"
+        git clone "${DOMAIN}/${REPO_PATH}" --depth=1 $GITHUB_WORKSPACE/vortex-clang
 
     - name: Build Kernel Binary
       run: |
@@ -34,6 +36,16 @@ jobs:
         export PATH=$CLANG_PATH:$PATH
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        
+        make clean && make mrproper
+        make exynos7885_defconfig
+        make CC=clang HOSTCC=clang-14 LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump -j$(nproc)
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Eureka-Kernel-R9.2-Image
+        path: kernel-source/arch/arm64/boot/Image.gz-dtb
         
         make clean && make mrproper
         make exynos7885_defconfig
