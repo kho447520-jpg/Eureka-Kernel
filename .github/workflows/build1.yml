@@ -1,4 +1,4 @@
-name: Build Eureka Kernel R9.2
+name: Build Eureka Kernel Android 13
 
 on:
   workflow_dispatch:
@@ -8,23 +8,28 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # Bước này ép GitHub Actions bốc chính xác duy nhất nhánh R9.2_rom của Eureka về ngay từ đầu
-    - name: Checkout Eureka Source (Branch R9.2_rom)
+    # Bước 1: Ép hệ thống tải chính xác nhánh R24U tương thích hoàn toàn với Android 13
+    - name: Checkout Eureka Source (Branch R24U)
       uses: actions/checkout@v4
       with:
         repository: eurekadevelopment/Eureka-Kernel-Exynos7885-Q-R-S
-        ref: R9.2_rom
+        ref: R24U
         path: kernel-source
 
+    # Bước 2: Cài đặt các công cụ biên dịch bắt buộc
     - name: Install Dependencies
       run: |
         sudo apt update
         sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev libncurses5-dev libncursesw5-dev squashfs-tools
 
+    # Bước 3: Tải trình biên dịch Vortex Clang (bảo vệ link bằng biến số tránh lỗi sập hệ thống)
     - name: Download Vortex Clang Toolchain
       run: |
-        git clone https://github.com --depth=1 $GITHUB_WORKSPACE/vortex-clang
+        DOMAIN="https://github.com"
+        REPO_PATH="eurekadevelopment/Vortex-Clang.git"
+        git clone "${DOMAIN}/${REPO_PATH}" --depth=1 $GITHUB_WORKSPACE/vortex-clang
 
+    # Bước 4: Tiến hành cấu hình và biên dịch Kernel cho chip Exynos 7885
     - name: Build Kernel Binary
       run: |
         cd $GITHUB_WORKSPACE/kernel-source
@@ -39,8 +44,9 @@ jobs:
         make exynos7885_defconfig
         make CC=clang HOSTCC=clang-14 LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump -j$(nproc)
 
+    # Bước 5: Đóng gói và xuất file Kernel đầu ra để bạn tải về
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Eureka-Kernel-R9.2-Image
+        name: Eureka-Kernel-Android13-Image
         path: kernel-source/arch/arm64/boot/Image.gz-dtb
