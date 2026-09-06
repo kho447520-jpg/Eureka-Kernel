@@ -1,0 +1,45 @@
+name: Build Eureka Kernel R9.2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Kernel Source (R9.2)
+      uses: actions/checkout@v3
+      with:
+        repository: eurekadevelopment/Eureka-Kernel-Exynos7885-Q-R-S
+        ref: R9.2  # Chỉ định chính xác tag hoặc branch R9.2 của Eureka
+        submodules: true
+
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git ccache automake flex lzop bison build-essential zip curl zlib1g-dev libssl-dev libelf-dev bc ncurses-dev
+
+    - name: Download Vortex Clang Toolchain
+      run: |
+        git clone https://github.com --depth=1 $GITHUB_WORKSPACE/vortex-clang
+
+    - name: Build Kernel Binary
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CLANG_PATH=$GITHUB_WORKSPACE/vortex-clang/bin
+        export PATH=$CLANG_PATH:$PATH
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        
+        make clean && make mrproper
+        make exynos7885_defconfig
+        make CC=clang HOSTCC=clang-14 LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump -j$(nproc)
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Eureka-Kernel-R9.2
+        path: arch/arm64/boot/Image.gz-dtb
+        
