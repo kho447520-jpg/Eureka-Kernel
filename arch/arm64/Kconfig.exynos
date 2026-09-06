@@ -47,6 +47,10 @@ config MACH_EXYNOS7885_M20_OPEN
 	help
 	Say Y here if you want to enable building dtbo for Galaxy M20.
 
+config MACH_EXYNOS7885_JACKPOTLTE_GLOBAL
+	bool "Build Dtbo image for A8 2018"
+	depends on SOC_EXYNOS7885
+
 config USE_STOCK_CONFIG_FOR_IKCONFIG
 	bool "Use stock config for /proc/config.gz"
 	depends on IKCONFIG
