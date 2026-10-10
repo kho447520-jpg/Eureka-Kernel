@@ -922,8 +922,8 @@ INDIVIDUAL() {
 
 ###################### Script starts here #######################
 
-if [ "${BOT_TOKEN}" == "0" ]; then
-	echo " ${RED}ERROR! Please configure Telegram vars properly."
+#if [ "${BOT_TOKEN}" == "0" ]; then
+#	echo " ${RED}ERROR! Please configure #Telegram vars properly."
 	exit
 fi
 
