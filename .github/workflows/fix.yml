@@ -37,45 +37,50 @@ jobs:
           git checkout v3.3.0
           cd ..
 
-      # 2. Tự động chèn hook (Dùng Python an toàn 100%)
-      - name: Auto-Patch Hooks (Python)
+      # 2. Tạo script Python tự động vá hook
+      - name: Create Patch Script
         working-directory: ./kernel
         run: |
-          python3 -c '
-import os
+          cat << 'EOF' > patch_ksu.py
+          import os
 
-hooks = [
-    ("fs/read_write.c", "ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)\n{", 
-     "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\n\tksu_handle_vfs_read(&file, &buf, &count, &pos);\n#endif\n"),
-    ("fs/open.c", "SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)\n{",
-     "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\n\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);\n#endif\n"),
-    ("fs/stat.c", "int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,\n\t\tint flag)\n{",
-     "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\tksu_handle_stat(&dfd, &filename, &flag);\n#endif\n"),
-    ("drivers/input/input.c", "static void input_handle_event(struct input_dev *dev,\n\t\t\t       unsigned int type, unsigned int code, int value)\n{",
-     "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n\tksu_handle_input_handle_event(&type, &code, &value);\n#endif\n")
-]
+          hooks = [
+              ("fs/read_write.c", "ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)\n{", 
+               "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\n\tksu_handle_vfs_read(&file, &buf, &count, &pos);\n#endif\n"),
+              ("fs/open.c", "SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)\n{",
+               "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\n\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);\n#endif\n"),
+              ("fs/stat.c", "int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,\n\t\tint flag)\n{",
+               "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n\tksu_handle_stat(&dfd, &filename, &flag);\n#endif\n"),
+              ("drivers/input/input.c", "static void input_handle_event(struct input_dev *dev,\n\t\t\t       unsigned int type, unsigned int code, int value)\n{",
+               "\n#ifdef CONFIG_KSU\n\textern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n\tksu_handle_input_handle_event(&type, &code, &value);\n#endif\n")
+          ]
 
-for filepath, target, hook in hooks:
-    if not os.path.exists(filepath):
-        print(f"Không tìm thấy {filepath}")
-        continue
-    with open(filepath, "r") as f:
-        content = f.read()
-    
-    if "ksu_handle_" in content:
-        print(f"{filepath} đã có hook, bỏ qua.")
-        continue
-    
-    if target in content:
-        content = content.replace(target, target + hook, 1)
-        with open(filepath, "w") as f:
-            f.write(content)
-        print(f"Đã vá thành công {filepath}")
-    else:
-        print(f"CẢNH BÁO: Không tìm thấy đoạn khớp trong {filepath}. Có thể do khoảng trắng.")
-'
+          for filepath, target, hook in hooks:
+              if not os.path.exists(filepath):
+                  print(f"Không tìm thấy {filepath}")
+                  continue
+              with open(filepath, "r") as f:
+                  content = f.read()
+              
+              if "ksu_handle_" in content:
+                  print(f"{filepath} đã có hook, bỏ qua.")
+                  continue
+              
+              if target in content:
+                  content = content.replace(target, target + hook, 1)
+                  with open(filepath, "w") as f:
+                      f.write(content)
+                  print(f"Đã vá thành công {filepath}")
+              else:
+                  print(f"CẢNH BÁO: Không tìm thấy đoạn khớp trong {filepath}.")
+          EOF
 
-      # 3. Cấu hình KSU
+      # 3. Chạy script Python để vá hook
+      - name: Auto-Patch Hooks
+        working-directory: ./kernel
+        run: python3 patch_ksu.py
+
+      # 4. Cấu hình KSU
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
         run: |
