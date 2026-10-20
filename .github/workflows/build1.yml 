@@ -1,0 +1,22 @@
+- name: Setup KernelSUNext
+  working-directory: ./kernel
+  run: |
+    echo "=== Đang ở thư mục gốc của kernel: $(pwd) ==="
+    ls -la | grep -E "arch|drivers|scripts|KernelSU" || true
+
+    # Chạy script setup
+    curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy v3.3.0
+    
+    # Xóa thư mục cũ nếu có xung đột (chỉ xóa nếu nó rỗng hoặc lỗi)
+    # (Không dùng rm -rf để tránh mất code nếu có, chỉ cảnh báo)
+    
+    echo "=== Kiểm tra lại sau khi setup ==="
+    if [ -d "KernelSU" ]; then
+      echo "ĐÃ TÌM THẤY THƯ MỤC KernelSU TẠI THƯ MỤC GỐC!"
+      ls -la KernelSU/ | head -n 10
+    else
+      echo "LỖI: Không có thư mục KernelSU ở thư mục gốc!"
+      echo "Đang tìm kiếm trong toàn bộ cây thư mục..."
+      find . -type d -name "KernelSU" | head -n 5
+      exit 1
+    fi
