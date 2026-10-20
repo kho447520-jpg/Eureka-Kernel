@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_BRANCH: R24U 
+  KERNEL_BRANCH: R24U
 
 jobs:
   test-ksu-build:
@@ -23,9 +23,26 @@ jobs:
           path: kernel
           fetch-depth: 0
 
+      # 1. Thay thế curl bằng git clone trực tiếp nhánh legacy
       - name: Setup KernelSUNext
         working-directory: ./kernel
-        run: curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy v3.3.0
+        run: |
+          echo "=== Đang tải KernelSU-Next v3.3.0 từ nhánh legacy ==="
+          rm -rf KernelSU
+          git clone --depth=1 -b legacy https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
+          cd KernelSU
+          git fetch --depth=1 origin tag v3.3.0
+          git checkout v3.3.0
+          cd ..
+          
+          # Kiểm tra xem đã có Makefile chưa
+          if [ -f "KernelSU/Makefile" ] || [ -f "KernelSU/kernel/Makefile" ]; then
+            echo "✅ Đã tải KernelSU-Next v3.3.0 (legacy) thành công!"
+          else
+            echo "❌ LỖI: Không tìm thấy Makefile trong thư mục KernelSU!"
+            ls -la KernelSU/
+            exit 1
+          fi
 
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
@@ -70,12 +87,11 @@ jobs:
           export PLATFORM_VERSION=11
           make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r ${{ matrix.defconfig }}
 
-      # Chỉ build các file liên quan đến KernelSU để test lỗi
+      # 2. Thử build KernelSU
       - name: Test Build KernelSU only
         working-directory: ./kernel
         run: |
           export PLATFORM_VERSION=11
-          # Build thử thư mục KernelSU
           make -j$(nproc) O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r \
             CC=${CC} LD=${LD} AR=${AR} NM=${NM} \
             OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
