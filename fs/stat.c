@@ -87,8 +87,6 @@ int vfs_fstat(unsigned int fd, struct kstat *stat)
 }
 EXPORT_SYMBOL(vfs_fstat);
 
-extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
-
 int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,
 		int flag)
 {
@@ -100,29 +98,27 @@ int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,
 	int error = -EINVAL;
 	unsigned int lookup_flags = 0;
 
-        ksu_handle_stat(&dfd, &filename, &flag);
+	if ((flag & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
+		      AT_EMPTY_PATH)) != 0)
+		goto out;
 
-        if ((flag & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
-                      AT_EMPTY_PATH)) != 0)
-                goto out;
-
-        if (!(flag & AT_SYMLINK_NOFOLLOW))
-                lookup_flags |= LOOKUP_FOLLOW;
-        if (flag & AT_EMPTY_PATH)
-                lookup_flags |= LOOKUP_EMPTY;
+	if (!(flag & AT_SYMLINK_NOFOLLOW))
+		lookup_flags |= LOOKUP_FOLLOW;
+	if (flag & AT_EMPTY_PATH)
+		lookup_flags |= LOOKUP_EMPTY;
 retry:
-        error = user_path_at(dfd, filename, lookup_flags, &path);
-        if (error)
-                goto out;
+	error = user_path_at(dfd, filename, lookup_flags, &path);
+	if (error)
+		goto out;
 
-        error = vfs_getattr(&path, stat);
-        path_put(&path);
-        if (retry_estale(error, lookup_flags)) {
-                lookup_flags |= LOOKUP_REVAL;
-                goto retry;
-        }
+	error = vfs_getattr(&path, stat);
+	path_put(&path);
+	if (retry_estale(error, lookup_flags)) {
+		lookup_flags |= LOOKUP_REVAL;
+		goto retry;
+	}
 out:
-        return error;
+	return error;
 }
 EXPORT_SYMBOL(vfs_fstatat);
 
