@@ -1,40 +1,156 @@
-- name: Auto-Patch KernelSU Hooks
-  working-directory: ./kernel
-  run: |
-    echo "=== Bắt đầu tự động chèn hook KernelSU ==="
+name: Build Kernel A10 (Haubai) with KernelSU-Next
 
-    # 1. Vá fs/read_write.c (vfs_read)
-    echo "-> Đang vá fs/read_write.c..."
-    # Chèn ngay sau dòng khai báo hàm vfs_read
-    sed -i '/^ssize_t vfs_read(struct file \*file, char __user \*buf, size_t count, loff_t \*pos)/a\
-    #ifdef CONFIG_KSU\
-    \textern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\
-    \tksu_handle_vfs_read(\&file, \&buf, \&count, \&pos);\
-    #endif' fs/read_write.c
+on:
+  workflow_dispatch:
+  push:
+    branches: [ R24U ]
 
-    # 2. Vá fs/open.c (faccessat)
-    echo "-> Đang vá fs/open.c..."
-    # Tìm hàm SYSCALL_DEFINE3(faccessat...) và chèn trước dòng return vfs_faccessat
-    # Lưu ý: Exynos có thể dùng do_faccessat thay vì vfs_faccessat
-    sed -i '/SYSCALL_DEFINE3(faccessat, int, dfd, const char __user \*, filename, int, mode)/,/^}/ s/return \(vfs_\|do_\)faccessat/#ifdef CONFIG_KSU\
-    \textern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\
-    \tksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\
-    #endif\
-    return \1faccessat/' fs/open.c
+env:
+  KERNEL_BRANCH: R24U
 
-    # 3. Vá fs/stat.c (vfs_fstatat)
-    echo "-> Đang vá fs/stat.c..."
-    sed -i '/int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat, int flags)/,/^}/ s/return vfs_statx/#ifdef CONFIG_KSU\
-    \textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\
-    \tksu_handle_stat(\&dfd, \&filename, \&flags);\
-    #endif\
-    return vfs_statx/' fs/stat.c
+jobs:
+  build:
+    runs-on: ubuntu-24.04
 
-    # 4. Vá drivers/input/input.c (input_handle_event)
-    echo "-> Đang vá drivers/input/input.c..."
-    sed -i '/^static void input_handle_event(struct input_dev \*dev,/,/^{/ s/^{/{\n#ifdef CONFIG_KSU\
-    \textern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
-    \tksu_handle_input_handle_event(\&type, \&code, \&value);\
-    #endif/' drivers/input/input.c
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.KERNEL_BRANCH }}
+          path: kernel
+          fetch-depth: 0
 
-    echo "=== Đã chèn xong các hook ==="
+      - name: Set Git user
+        working-directory: ./kernel
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      # 1. Tải KernelSU-Next v3.3.0 (Legacy)
+      - name: Setup KernelSUNext
+        working-directory: ./kernel
+        run: |
+          rm -rf KernelSU
+          git clone --depth=1 -b legacy https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
+          cd KernelSU
+          git fetch --depth=1 origin tag v3.3.0
+          git checkout v3.3.0
+          cd ..
+
+      # 2. Tự động chèn các hook còn thiếu (trừ fs/exec.c bạn đã làm rồi)
+      - name: Auto-Patch KernelSU Hooks
+        working-directory: ./kernel
+        run: |
+          echo "=== Bắt đầu vá hook ==="
+          
+          # Vá fs/read_write.c
+          sed -i '/ssize_t vfs_read(struct file \*file, char __user \*buf, size_t count, loff_t \*pos)/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\
+              ksu_handle_vfs_read(\&file, \&buf, \&count, \&pos);\
+          #endif' fs/read_write.c
+
+          # Vá fs/open.c (Samsung dùng vfs_faccessat)
+          sed -i '/return vfs_faccessat(dfd, filename, mode);/i\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\
+              ksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\
+          #endif' fs/open.c
+
+          # Vá fs/stat.c
+          sed -i '/return vfs_statx(dfd, filename, flags, stat, STATX_BASIC_STATS);/i\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\
+              ksu_handle_stat(\&dfd, \&filename, \&flags);\
+          #endif' fs/stat.c
+
+          # Vá drivers/input/input.c
+          sed -i '/static void input_handle_event(struct input_dev \*dev,/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
+              ksu_handle_input_handle_event(\&type, \&code, \&value);\
+          #endif' drivers/input/input.c
+
+          echo "=== Đã chèn xong các hook ==="
+
+      # 3. Cấu hình KSU
+      - name: Enable KernelSU in defconfig
+        working-directory: ./kernel
+        run: |
+          echo "CONFIG_KALLSYMS=y" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "CONFIG_KALLSYMS_ALL=y" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "# CONFIG_KPROBES is not set" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "# CONFIG_HAVE_KPROBES is not set" >> arch/arm64/configs/exynos7885-a10_defconfig
+          echo "# CONFIG_KPROBES_EVENTS is not set" >> arch/arm64/configs/exynos7885-a10_defconfig
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y bc bison flex libssl-dev make git python3 cpio gcc-aarch64-linux-gnu
+
+      - name: Setup Neutron Clang
+        run: |
+          mkdir -p toolchain
+          cd toolchain
+          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=10032024
+          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") --patch=glibc
+          cd ..
+          echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
+
+      - name: Set environment
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "LD=ld.lld" >> $GITHUB_ENV
+          echo "AR=llvm-ar" >> $GITHUB_ENV
+          echo "NM=llvm-nm" >> $GITHUB_ENV
+          echo "OBJCOPY=llvm-objcopy" >> $GITHUB_ENV
+          echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
+          echo "STRIP=llvm-strip" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "ARCH=arm64" >> $GITHUB_ENV
+
+      - name: Configure kernel
+        working-directory: ./kernel
+        run: |
+          export PLATFORM_VERSION=11
+          make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r exynos7885-a10_defconfig
+
+      - name: Build kernel
+        working-directory: ./kernel
+        run: |
+          export PLATFORM_VERSION=11
+          make -j$(nproc) O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r \
+            CC=${CC} LD=${LD} AR=${AR} NM=${NM} \
+            OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
+            CROSS_COMPILE=${CROSS_COMPILE} 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-a10
+          path: kernel/build.log
+
+      - name: Prepare AnyKernel from source
+        run: |
+          cp -r kernel/kernel_zip/anykernel anykernel
+
+      - name: Copy kernel image
+        run: |
+          cp kernel/out/arch/arm64/boot/Image.gz-dtb anykernel/ || \
+          cp kernel/out/arch/arm64/boot/Image.gz anykernel/ || \
+          cp kernel/out/arch/arm64/boot/Image anykernel/
+
+      - name: Create flashable zip
+        run: |
+          cd anykernel
+          zip -r9 ../Haubai_A10.zip *
+          cd ..
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Haubai_A10
+          path: Haubai_A10.zip
