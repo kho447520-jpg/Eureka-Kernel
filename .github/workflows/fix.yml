@@ -1,0 +1,40 @@
+- name: Auto-Patch KernelSU Hooks
+  working-directory: ./kernel
+  run: |
+    echo "=== Bắt đầu tự động chèn hook KernelSU ==="
+
+    # 1. Vá fs/read_write.c (vfs_read)
+    echo "-> Đang vá fs/read_write.c..."
+    # Chèn ngay sau dòng khai báo hàm vfs_read
+    sed -i '/^ssize_t vfs_read(struct file \*file, char __user \*buf, size_t count, loff_t \*pos)/a\
+    #ifdef CONFIG_KSU\
+    \textern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\
+    \tksu_handle_vfs_read(\&file, \&buf, \&count, \&pos);\
+    #endif' fs/read_write.c
+
+    # 2. Vá fs/open.c (faccessat)
+    echo "-> Đang vá fs/open.c..."
+    # Tìm hàm SYSCALL_DEFINE3(faccessat...) và chèn trước dòng return vfs_faccessat
+    # Lưu ý: Exynos có thể dùng do_faccessat thay vì vfs_faccessat
+    sed -i '/SYSCALL_DEFINE3(faccessat, int, dfd, const char __user \*, filename, int, mode)/,/^}/ s/return \(vfs_\|do_\)faccessat/#ifdef CONFIG_KSU\
+    \textern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\
+    \tksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\
+    #endif\
+    return \1faccessat/' fs/open.c
+
+    # 3. Vá fs/stat.c (vfs_fstatat)
+    echo "-> Đang vá fs/stat.c..."
+    sed -i '/int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat, int flags)/,/^}/ s/return vfs_statx/#ifdef CONFIG_KSU\
+    \textern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\
+    \tksu_handle_stat(\&dfd, \&filename, \&flags);\
+    #endif\
+    return vfs_statx/' fs/stat.c
+
+    # 4. Vá drivers/input/input.c (input_handle_event)
+    echo "-> Đang vá drivers/input/input.c..."
+    sed -i '/^static void input_handle_event(struct input_dev \*dev,/,/^{/ s/^{/{\n#ifdef CONFIG_KSU\
+    \textern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
+    \tksu_handle_input_handle_event(\&type, \&code, \&value);\
+    #endif/' drivers/input/input.c
+
+    echo "=== Đã chèn xong các hook ==="
