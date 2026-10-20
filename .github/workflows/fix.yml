@@ -37,39 +37,41 @@ jobs:
           git checkout v3.3.0
           cd ..
 
-      # 2. GHI ĐÈ 4 FILE CÒN THIẾU BẰNG CODE ĐÃ SỬA SẴN
+      # 2. GHI ĐÈ CODE HOOK VÀO 4 FILE
       - name: Overwrite Missing Files With Hooks
         working-directory: ./kernel
         run: |
+          echo "=== Bắt đầu chèn hook ==="
+          
           # Vá fs/read_write.c
           sed -i '/ssize_t vfs_read(struct file \*file, char __user \*buf, size_t count, loff_t \*pos)/a\
           #ifdef CONFIG_KSU\
               extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\
               ksu_handle_vfs_read(\&file, \&buf, \&count, \&pos);\
           #endif' fs/read_write.c
-          
-          # Vá fs/open.c
-          sed -i '/SYSCALL_DEFINE3(faccessat, int, dfd, const char __user \*, filename, int, mode)/a\
+
+          # Vá fs/open.c (dùng vfs_faccessat vì đây là kernel Samsung)
+          sed -i '/return vfs_faccessat(dfd, filename, mode);/i\
           #ifdef CONFIG_KSU\
               extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\
               ksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\
           #endif' fs/open.c
-          
+
           # Vá fs/stat.c
-          sed -i '/int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/a\
+          sed -i '/return vfs_statx(dfd, filename, flags, stat, STATX_BASIC_STATS);/i\
           #ifdef CONFIG_KSU\
               extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\
-              ksu_handle_stat(\&dfd, \&filename, \&flag);\
+              ksu_handle_stat(\&dfd, \&filename, \&flags);\
           #endif' fs/stat.c
-          
+
           # Vá drivers/input/input.c
           sed -i '/static void input_handle_event(struct input_dev \*dev,/a\
           #ifdef CONFIG_KSU\
               extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
               ksu_handle_input_handle_event(\&type, \&code, \&value);\
           #endif' drivers/input/input.c
-          
-          echo "=== Đã chèn hook vào 4 file ==="
+
+          echo "=== Đã chèn xong hook ==="
 
       # 3. Cấu hình KSU
       - name: Enable KernelSU in defconfig
