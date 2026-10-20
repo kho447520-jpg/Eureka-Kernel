@@ -1,4 +1,4 @@
-name: Build Kernel A10 (Haubai) with KernelSU-Next
+name: Build Kernel A10 (Haubai)
 
 on:
   workflow_dispatch:
@@ -37,41 +37,39 @@ jobs:
           git checkout v3.3.0
           cd ..
 
-      # 2. Tạo file header chứa hook và chèn include vào các file kernel
-      - name: Apply Hooks via Header File
+      # 2. GHI ĐÈ 4 FILE CÒN THIẾU BẰNG CODE ĐÃ SỬA SẴN
+      - name: Overwrite Missing Files With Hooks
         working-directory: ./kernel
         run: |
-          # Tạo file header chứa khai báo các hàm hook
-          cat << 'EOF' > include/linux/ksu_hooks.h
-          #ifndef _LINUX_KSU_HOOKS_H
-          #define _LINUX_KSU_HOOKS_H
-          #ifdef CONFIG_KSU
-          extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv, void *envp, int *flags);
-          extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);
-          extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);
-          extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
-          extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);
-          #endif
-          #endif
-          EOF
-
-          # Hàm trợ giúp để chèn include vào đầu file
-          insert_include() {
-            FILE=$1
-            if ! grep -q "ksu_hooks.h" "$FILE"; then
-              sed -i '1i #include <linux/ksu_hooks.h>' "$FILE"
-              echo "Đã chèn include vào $FILE"
-            fi
-          }
-
-          insert_include "fs/exec.c"
-          insert_include "fs/read_write.c"
-          insert_include "fs/open.c"
-          insert_include "fs/stat.c"
-          insert_include "drivers/input/input.c"
-
-          # Kiểm tra lại xem đã chèn include chưa
-          grep -l "ksu_hooks.h" fs/exec.c fs/read_write.c fs/open.c fs/stat.c drivers/input/input.c
+          # Vá fs/read_write.c
+          sed -i '/ssize_t vfs_read(struct file \*file, char __user \*buf, size_t count, loff_t \*pos)/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);\
+              ksu_handle_vfs_read(\&file, \&buf, \&count, \&pos);\
+          #endif' fs/read_write.c
+          
+          # Vá fs/open.c
+          sed -i '/SYSCALL_DEFINE3(faccessat, int, dfd, const char __user \*, filename, int, mode)/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\
+              ksu_handle_faccessat(\&dfd, \&filename, \&mode, NULL);\
+          #endif' fs/open.c
+          
+          # Vá fs/stat.c
+          sed -i '/int vfs_fstatat(int dfd, const char __user \*filename, struct kstat \*stat,/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\
+              ksu_handle_stat(\&dfd, \&filename, \&flag);\
+          #endif' fs/stat.c
+          
+          # Vá drivers/input/input.c
+          sed -i '/static void input_handle_event(struct input_dev \*dev,/a\
+          #ifdef CONFIG_KSU\
+              extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\
+              ksu_handle_input_handle_event(\&type, \&code, \&value);\
+          #endif' drivers/input/input.c
+          
+          echo "=== Đã chèn hook vào 4 file ==="
 
       # 3. Cấu hình KSU
       - name: Enable KernelSU in defconfig
