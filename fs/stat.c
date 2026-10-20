@@ -87,7 +87,8 @@ int vfs_fstat(unsigned int fd, struct kstat *stat)
 }
 EXPORT_SYMBOL(vfs_fstat);
 
-int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,
+int vfs_fstatat(int dfd, const char __user *filename,
+		struct kstat *stat,
 		int flag)
 {
 #ifdef CONFIG_KSU
