@@ -2,21 +2,36 @@
   working-directory: ./kernel
   run: |
     echo "=== Đang ở thư mục gốc của kernel: $(pwd) ==="
-    ls -la | grep -E "arch|drivers|scripts|KernelSU" || true
-
-    # Chạy script setup
+    
+    # 1. Chạy script setup tải KernelSU-Next
     curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy v3.3.0
     
-    # Xóa thư mục cũ nếu có xung đột (chỉ xóa nếu nó rỗng hoặc lỗi)
-    # (Không dùng rm -rf để tránh mất code nếu có, chỉ cảnh báo)
+    # 2. Tìm thư mục KernelSU (hoặc KernelSU-Next) ở bất kỳ đâu vừa được tải về
+    KSU_DIR=$(find . -maxdepth 3 -type d -name "KernelSU*" | head -n 1)
     
-    echo "=== Kiểm tra lại sau khi setup ==="
+    if [ -z "$KSU_DIR" ]; then
+      echo "LỖI NGHIÊM TRỌNG: Script setup không tải được thư mục KernelSU nào!"
+      exit 1
+    fi
+    
+    echo "Tìm thấy thư mục KSU tại: $KSU_DIR"
+    
+    # 3. Nếu nó không nằm ngay thư mục gốc (tên là ./KernelSU), tiến hành di chuyển/đổi tên
+    if [ "$KSU_DIR" != "./KernelSU" ]; then
+      echo "Thư mục đang nằm sai chỗ hoặc sai tên. Tiến hành di chuyển về thư mục gốc..."
+      # Xóa thư mục KernelSU cũ nếu nó bị rỗng hoặc lỗi (tùy chọn, cẩn thận)
+      rm -rf ./KernelSU 
+      # Di chuyển và đổi tên thành KernelSU
+      mv "$KSU_DIR" ./KernelSU
+      echo "Đã di chuyển thành công về ./KernelSU"
+    fi
+    
+    # 4. Kiểm tra lại lần cuối
+    echo "=== Kiểm tra lại thư mục KernelSU tại gốc ==="
     if [ -d "KernelSU" ]; then
-      echo "ĐÃ TÌM THẤY THƯ MỤC KernelSU TẠI THƯ MỤC GỐC!"
+      echo "✅ THÀNH CÔNG: Thư mục KernelSU đã sẵn sàng!"
       ls -la KernelSU/ | head -n 10
     else
-      echo "LỖI: Không có thư mục KernelSU ở thư mục gốc!"
-      echo "Đang tìm kiếm trong toàn bộ cây thư mục..."
-      find . -type d -name "KernelSU" | head -n 5
+      echo "❌ THẤT BẠI: Không thể đưa KernelSU về thư mục gốc!"
       exit 1
     fi
