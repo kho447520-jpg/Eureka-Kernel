@@ -49,7 +49,6 @@ jobs:
         working-directory: ./kernel
         run: |
           DEFCONFIG=arch/arm64/configs/${{ matrix.defconfig }}
-          # Xoá các dòng cũ (tránh duplicate khi rerun)
           sed -i '/CONFIG_KSU/d;/CONFIG_KALLSYMS/d;/CONFIG_KPROBES/d;/CONFIG_LOCALVERSION/d' "$DEFCONFIG"
           {
             echo "CONFIG_KALLSYMS=y"
@@ -68,15 +67,14 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y bc bison flex libssl-dev make git python3 cpio \
-                              gcc-aarch64-linux-gnu zip rsync
+                              gcc-aarch64-linux-gnu zip rsync zstd
 
-      # 3. Setup Neutron Clang (có verify)
+      # 3. Setup Neutron Clang — BỎ --patch=glibc (fix exit code 4)
       - name: Setup Neutron Clang
         run: |
           mkdir -p toolchain
           cd toolchain
           bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=10032024
-          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") --patch=glibc
           cd ..
           if [ -d "toolchain/bin" ]; then
             echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
@@ -114,7 +112,7 @@ jobs:
           make O=out ARCH=arm64 ${{ matrix.defconfig }}
           make O=out ARCH=arm64 olddefconfig
 
-      # 4. Build kernel — ép LOCALVERSION bằng biến make để chắc chắn ghi đè
+      # 4. Build — ép LOCALVERSION để chắc chắn ghi đè
       - name: Build kernel
         shell: bash
         working-directory: ./kernel
@@ -128,7 +126,7 @@ jobs:
             OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
             CROSS_COMPILE=${CROSS_COMPILE} 2>&1 | tee build.log
 
-      # 5. Verify version string thực tế
+      # 5. Verify version
       - name: Verify kernel version
         run: |
           echo "=== CONFIG_LOCALVERSION trong out/.config ==="
@@ -153,7 +151,7 @@ jobs:
             exit 1
           fi
 
-      # 6. Copy kernel image (fallback chính xác)
+      # 6. Copy kernel image (fallback)
       - name: Copy kernel image
         run: |
           set -e
