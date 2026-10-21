@@ -449,11 +449,9 @@ extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
 
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
-#ifdef CONFIG_KSU
-	extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr, size_t *count_ptr, loff_t **pos);
-	ksu_handle_vfs_read(&file, &buf, &count, &pos);
-#endif
 	ssize_t ret;
+
+	ksu_handle_vfs_read(&file, &buf, &count, &pos);
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
