@@ -3,10 +3,10 @@ name: Build Haubai_A10 + KernelSU-Next v1.1.1
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ R24U ]
 
 env:
-  KERNEL_BRANCH: R24U 
+  KERNEL_BRANCH: R24U
   KSU_REPO: https://github.com/KernelSU-Next/KernelSU-Next.git
   KSU_REF: v1.1.1
 
@@ -62,6 +62,7 @@ jobs:
         run: |
           DEFCONFIG=arch/arm64/configs/exynos7885-a10_defconfig
 
+          echo "CONFIG_DEBUG_KERNEL=y"             >> $DEFCONFIG
           echo "CONFIG_KALLSYMS=y"                 >> $DEFCONFIG
           echo "CONFIG_KALLSYMS_ALL=y"             >> $DEFCONFIG
           echo "CONFIG_KSU=y"                      >> $DEFCONFIG
@@ -105,6 +106,11 @@ jobs:
         working-directory: ./kernel
         run: |
           make O=out ARCH=arm64 exynos7885-a10_defconfig
+
+      - name: Debug KALLSYMS
+        working-directory: ./kernel
+        run: |
+          grep -E "KALLSYMS|DEBUG_KERNEL|CONFIG_KSU" out/.config || true
 
       - name: Verify KernelSU-Next config
         working-directory: ./kernel
