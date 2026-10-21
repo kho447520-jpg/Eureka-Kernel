@@ -8,7 +8,7 @@ on:
 env:
   KERNEL_BRANCH: R15-OneUI
   MERGE_FROM_BRANCH: R24U
-  KSU_REPO: https://github.com/tiann/KernelSU.git
+  KSU_REPO: https://github.com/kho447520-jpg/Eureka-Kernel
   KSU_REF: v3.3.1
 
 jobs:
