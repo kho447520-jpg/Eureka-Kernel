@@ -1,15 +1,14 @@
-name: Build R15-OneUI + BPF merge from R24U
+name: Build Haubai_A10 + KernelSU-Next v1.1.1
 
 on:
   workflow_dispatch:
   push:
-    branches: [ R15-OneUI ]
+    branches: [ main ]
 
 env:
-  KERNEL_BRANCH: R15-OneUI
-  MERGE_FROM_BRANCH: R24U
-  KSU_REPO: https://github.com/kho447520-jpg/Eureka-Kernel
-  KSU_REF: v3.3.1
+  KERNEL_BRANCH: main
+  KSU_REPO: https://github.com/KernelSU-Next/KernelSU-Next.git
+  KSU_REF: v1.1.1
 
 jobs:
   build:
@@ -40,52 +39,38 @@ jobs:
             git add .gitmodules
           fi
           git add -A
-          git commit -m "Purge KernelSU before merge" || echo "No changes"
+          git commit -m "Purge KernelSU before build" || echo "No changes"
 
-      - name: Merge R24U into R15-OneUI
+      - name: Add KernelSU-Next v1.1.1
         working-directory: ./kernel
         run: |
-          git remote add upstream https://github.com/${{ github.repository }}.git || true
-          git fetch upstream ${{ env.MERGE_FROM_BRANCH }}
-          git merge --no-ff upstream/${{ env.MERGE_FROM_BRANCH }} -X theirs -m "Merge ${{ env.MERGE_FROM_BRANCH }} for BPF"
-
-      - name: Add KernelSU (v3.3.1)
-        working-directory: ./kernel
-        run: |
-          git submodule add ${{ env.KSU_REPO }} KernelSU
-          cd KernelSU
+          git submodule add ${{ env.KSU_REPO }} KernelSU-Next
+          cd KernelSU-Next
           git fetch --tags --depth=1 origin ${{ env.KSU_REF }} || git fetch --tags
           git checkout ${{ env.KSU_REF }}
           git log --oneline -1
           cd ..
 
-      - name: Run KernelSU setup
+      - name: Run KernelSU-Next setup
         working-directory: ./kernel
         run: |
-          chmod +x KernelSU/kernel/setup.sh
-          ./KernelSU/kernel/setup.sh
+          chmod +x KernelSU-Next/kernel/setup.sh
+          ./KernelSU-Next/kernel/setup.sh
 
-      - name: Enable KernelSU in defconfig (Manual Hook)
+      - name: Enable KernelSU-Next in defconfig (Manual Hook)
         working-directory: ./kernel
         run: |
           DEFCONFIG=arch/arm64/configs/exynos7885-a10_defconfig
 
-          # Bắt buộc cho KernelSU
-          echo "CONFIG_KALLSYMS=y"                    >> $DEFCONFIG
-          echo "CONFIG_KALLSYMS_ALL=y"                >> $DEFCONFIG
-
-          # KernelSU core
-          echo "CONFIG_KSU=y"                         >> $DEFCONFIG
-          # Kernel 4.14 bắt buộc dùng manual hook
-          echo "CONFIG_KSU_MANUAL_HOOK=y"             >> $DEFCONFIG
-
-          # Tắt KPROBES (tránh xung đột manual hook và kích hoạt nhầm safe mode)
-          echo "# CONFIG_KPROBES is not set"          >> $DEFCONFIG
-          echo "# CONFIG_HAVE_KPROBES is not set"     >> $DEFCONFIG
-          echo "# CONFIG_KPROBE_EVENTS is not set"    >> $DEFCONFIG
-
-          # Tắt LTO (fix lỗi link)
-          echo "# CONFIG_LTO_CLANG is not set"        >> $DEFCONFIG
+          echo "CONFIG_KALLSYMS=y"                 >> $DEFCONFIG
+          echo "CONFIG_KALLSYMS_ALL=y"             >> $DEFCONFIG
+          echo "CONFIG_KSU=y"                      >> $DEFCONFIG
+          echo "CONFIG_KSU_MANUAL_HOOK=y"          >> $DEFCONFIG
+          echo "# CONFIG_KPROBES is not set"       >> $DEFCONFIG
+          echo "# CONFIG_HAVE_KPROBES is not set"  >> $DEFCONFIG
+          echo "# CONFIG_KPROBE_EVENTS is not set" >> $DEFCONFIG
+          echo "# CONFIG_LTO_CLANG is not set"     >> $DEFCONFIG
+          echo "CONFIG_SIPHASH=y"                  >> $DEFCONFIG
 
           tail -15 $DEFCONFIG
 
@@ -121,10 +106,10 @@ jobs:
         run: |
           make O=out ARCH=arm64 exynos7885-a10_defconfig
 
-      - name: Verify KernelSU config
+      - name: Verify KernelSU-Next config
         working-directory: ./kernel
         run: |
-          grep -q "CONFIG_KSU=y" out/.config || { echo "KernelSU not enabled!"; exit 1; }
+          grep -q "CONFIG_KSU=y" out/.config || { echo "KernelSU-Next not enabled!"; exit 1; }
           grep -q "CONFIG_KALLSYMS_ALL=y" out/.config || { echo "KALLSYMS_ALL missing!"; exit 1; }
 
       - name: Build kernel
