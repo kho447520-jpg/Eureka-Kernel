@@ -25,6 +25,7 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
+          repository: kho447520-jpg/Eureka-Kernel
           ref: ${{ env.KERNEL_BRANCH }}
           path: kernel
           fetch-depth: 0
