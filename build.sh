@@ -32,7 +32,7 @@ GCC_ARM32_FILE=arm-linux-gnueabi-
 
 # Export Telegram variables
 export CHAT_ID=-0000000000000
-export BOT_TOKEN=""
+export BOT_TOKEN=0
 
 # Export commands
 export KBUILD_BUILD_USER=Eureka
