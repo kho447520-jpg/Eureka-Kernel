@@ -7,7 +7,10 @@ on:
 
 env:
   KERNEL_BRANCH: R24U
-  KSU_TAG: v3.4.0-legacy
+  KSU_REPO:https://github.com/tiann/kernelSU
+  KSU_DIR: KernelSU
+  KSU_SETUP_REF: main
+  KSU_TAG: v3.3.0
 
 jobs:
   build:
@@ -36,15 +39,15 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      - name: Check KernelSU-Next tag exists
+      - name: Check KernelSU tag exists
         run: |
-          git ls-remote --tags https://github.com/KernelSU-Next/KernelSU-Next | grep -q "refs/tags/${{ env.KSU_TAG }}$" || { echo "Tag ${{ env.KSU_TAG }} not found"; git ls-remote --tags https://github.com/KernelSU-Next/KernelSU-Next | tail -10; exit 1; }
+          git ls-remote --tags https://github.com/${{ env.KSU_REPO }} | grep -q "refs/tags/${{ env.KSU_TAG }}$" || { echo "Tag ${{ env.KSU_TAG }} not found in ${{ env.KSU_REPO }}"; git ls-remote --tags https://github.com/${{ env.KSU_REPO }} | tail -10; exit 1; }
 
-      - name: Setup KernelSU-Next ${{ env.KSU_TAG }}
+      - name: Setup KernelSU ${{ env.KSU_TAG }}
         working-directory: ./kernel
         run: |
           set -e
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s ${{ env.KSU_TAG }}
+          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_SETUP_REF }}/kernel/setup.sh" | bash -s ${{ env.KSU_TAG }}
 
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
@@ -97,11 +100,11 @@ jobs:
           echo "=== KSU symbols in out/.config ==="
           grep -i "KSU\|KPROBES" out/.config || true
           echo "=== Kbuild hook logic ==="
-          grep -n -i "hook" KernelSU-Next/kernel/Kbuild || true
+          grep -n -i "hook" ${{ env.KSU_DIR }}/kernel/Kbuild || true
           echo "=== Kbuild lines 140-180 ==="
-          sed -n 140,180p KernelSU-Next/kernel/Kbuild
+          sed -n 140,180p ${{ env.KSU_DIR }}/kernel/Kbuild
           echo "=== Kconfig ==="
-          cat KernelSU-Next/kernel/Kconfig
+          cat ${{ env.KSU_DIR }}/kernel/Kconfig
 
       - name: Build kernel
         shell: bash
