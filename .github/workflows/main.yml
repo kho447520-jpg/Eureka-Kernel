@@ -1,4 +1,4 @@
-name: Build R15-OneUI + BPF merge from R24U
+name: Build Kernels (Haubai) - A10/A20/A30/A30s/A40
 
 on:
   workflow_dispatch:
@@ -7,12 +7,6 @@ on:
 
 env:
   KERNEL_BRANCH: R24U
-  # Official KernelSU (tiann). For KernelSU-Next use:
-  #   KSU_REPO: KernelSU-Next/KernelSU-Next, KSU_DIR: KernelSU-Next, KSU_SETUP_REF: next, KSU_TAG: v3.4.0-legacy
-  KSU_REPO: tiann/KernelSU
-  KSU_DIR: KernelSU
-  KSU_SETUP_REF: main
-  KSU_TAG: v3.3.0
 
 jobs:
   build:
@@ -31,6 +25,7 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
+          repository: kho447520-jpg/Eureka-Kernel
           ref: ${{ env.KERNEL_BRANCH }}
           path: kernel
           fetch-depth: 0
@@ -41,30 +36,18 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      - name: Check KernelSU tag exists
-        run: |
-          git ls-remote --tags https://github.com/${{ env.KSU_REPO }} | grep -q "refs/tags/${{ env.KSU_TAG }}$" || { echo "Tag ${{ env.KSU_TAG }} not found in ${{ env.KSU_REPO }}"; git ls-remote --tags https://github.com/${{ env.KSU_REPO }} | tail -10; exit 1; }
-
-      - name: Setup KernelSU ${{ env.KSU_TAG }}
+      # 1. Tải KernelSU-Next v3.3.0 (Legacy)
+      - name: Setup KernelSUNext
         working-directory: ./kernel
         run: |
-          set -e
-          curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_SETUP_REF }}/kernel/setup.sh" | bash -s ${{ env.KSU_TAG }}
+          rm -rf KernelSU
+          git clone --depth=1 -b legacy https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
+          cd KernelSU
+          git fetch --depth=1 origin tag v3.3.0
+          git checkout v3.3.0
+          cd ..
 
-      - name: Debug KernelSU setup result
-        working-directory: ./kernel
-        run: |
-          echo "=== top-level dirs matching KernelSU/kernelsu ==="
-          ls -la | grep -i kernelsu || echo "(none found)"
-          echo "=== drivers/kernelsu ==="
-          ls -la drivers/kernelsu 2>&1 || echo "(missing)"
-          echo "=== drivers/Kconfig: kernelsu lines ==="
-          grep -n -i kernelsu drivers/Kconfig || echo "(no reference)"
-          echo "=== drivers/Makefile: kernelsu lines ==="
-          grep -n -i kernelsu drivers/Makefile || echo "(no reference)"
-          echo "=== git status (uncommitted changes from setup script) ==="
-          git status --porcelain
-
+      # 2. Cấu hình KSU vào defconfig của từng thiết bị
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
         run: |
@@ -80,7 +63,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt update
-          sudo apt install -y bc bison flex libssl-dev libelf-dev make git python3 cpio zip lz4 device-tree-compiler gcc-aarch64-linux-gnu
+          sudo apt install -y bc bison flex libssl-dev make git python3 cpio gcc-aarch64-linux-gnu
 
       - name: Setup Neutron Clang
         run: |
@@ -101,7 +84,6 @@ jobs:
           echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
           echo "STRIP=llvm-strip" >> $GITHUB_ENV
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
           echo "ARCH=arm64" >> $GITHUB_ENV
 
       - name: Configure kernel
@@ -110,18 +92,7 @@ jobs:
           export PLATFORM_VERSION=11
           make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r CONFIG_KSU_MANUAL_HOOK=y ${{ matrix.defconfig }}
 
-      - name: Debug KernelSU config and Kbuild
-        working-directory: ./kernel
-        run: |
-          echo "=== KSU symbols in out/.config ==="
-          grep -i "KSU\|KPROBES" out/.config || true
-          echo "=== Kbuild hook logic ==="
-          grep -n -i "hook" ${{ env.KSU_DIR }}/kernel/Kbuild || true
-          echo "=== Kbuild lines 140-180 ==="
-          sed -n 140,180p ${{ env.KSU_DIR }}/kernel/Kbuild
-          echo "=== Kconfig ==="
-          cat ${{ env.KSU_DIR }}/kernel/Kconfig
-
+      # 3. Build Kernel (Đã bỏ LOCALVERSION)
       - name: Build kernel
         shell: bash
         working-directory: ./kernel
@@ -131,7 +102,7 @@ jobs:
           make -j$(nproc) O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r \
             CC=${CC} LD=${LD} AR=${AR} NM=${NM} \
             OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
-            CROSS_COMPILE=${CROSS_COMPILE} CLANG_TRIPLE=${CLANG_TRIPLE} \
+            CROSS_COMPILE=${CROSS_COMPILE} \
             CONFIG_KSU_MANUAL_HOOK=y 2>&1 | tee build.log
 
       - name: Upload build log
@@ -154,11 +125,12 @@ jobs:
       - name: Create flashable zip
         run: |
           cd anykernel
-          zip -r9 ../HaubaiKernel_${{ matrix.defconfig }}.zip *
+          DEVICE=$(echo "${{ matrix.defconfig }}" | sed 's/exynos7885-//;s/_defconfig//')
+          zip -r9 ../Haubai_${DEVICE}.zip *
           cd ..
 
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: HaubaiKernel_${{ matrix.defconfig }}
-          path: HaubaiKernel_${{ matrix.defconfig }}.zip
+          name: Haubai_${{ matrix.defconfig }}
+          path: Haubai_*.zip
