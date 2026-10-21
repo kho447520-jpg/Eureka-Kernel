@@ -89,7 +89,7 @@ jobs:
         working-directory: ./kernel
         run: |
           export PLATFORM_VERSION=11
-          make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r ${{ matrix.defconfig }}
+          make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r CONFIG_KSU_MANUAL_HOOK=y ${{ matrix.defconfig }}
 
       - name: Debug KernelSU config and Kbuild
         working-directory: ./kernel
@@ -112,7 +112,8 @@ jobs:
           make -j$(nproc) O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r \
             CC=${CC} LD=${LD} AR=${AR} NM=${NM} \
             OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
-            CROSS_COMPILE=${CROSS_COMPILE} CLANG_TRIPLE=${CLANG_TRIPLE} 2>&1 | tee build.log
+            CROSS_COMPILE=${CROSS_COMPILE} CLANG_TRIPLE=${CLANG_TRIPLE} \
+            CONFIG_KSU_MANUAL_HOOK=y 2>&1 | tee build.log
 
       - name: Upload build log
         if: always()
