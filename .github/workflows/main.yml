@@ -7,7 +7,7 @@ on:
 
 env:
   KERNEL_BRANCH: R24U
-  KSU_REPO: https://github.com/tiann/kernelSU
+  KSU_REPO: tiann/KernelSU
   KSU_DIR: KernelSU
   KSU_SETUP_REF: main
   KSU_TAG: v3.3.0
