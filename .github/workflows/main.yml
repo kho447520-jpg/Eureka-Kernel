@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 env:
-  KERNEL_BRANCH: main
+  KERNEL_BRANCH: R24U 
   KSU_REPO: https://github.com/KernelSU-Next/KernelSU-Next.git
   KSU_REF: v1.1.1
 
