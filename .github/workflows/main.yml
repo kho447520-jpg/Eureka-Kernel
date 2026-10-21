@@ -7,7 +7,7 @@ on:
 
 env:
   KERNEL_BRANCH: R24U 
-  KSU_TAG: v3.4.0-legacy
+  KSU_TAG: v3.3.1
 
 jobs:
   build:
@@ -90,6 +90,18 @@ jobs:
         run: |
           export PLATFORM_VERSION=11
           make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r ${{ matrix.defconfig }}
+
+      - name: Debug KernelSU config and Kbuild
+        working-directory: ./kernel
+        run: |
+          echo "=== KSU symbols in out/.config ==="
+          grep -i "KSU\|KPROBES" out/.config || true
+          echo "=== Kbuild hook logic ==="
+          grep -n -i "hook" KernelSU-Next/kernel/Kbuild || true
+          echo "=== Kbuild lines 140-180 ==="
+          sed -n 140,180p KernelSU-Next/kernel/Kbuild
+          echo "=== Kconfig ==="
+          cat KernelSU-Next/kernel/Kconfig
 
       - name: Build kernel
         shell: bash
