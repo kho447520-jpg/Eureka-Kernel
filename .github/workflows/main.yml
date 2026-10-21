@@ -7,6 +7,8 @@ on:
 
 env:
   KERNEL_BRANCH: R24U
+  # Official KernelSU (tiann). For KernelSU-Next use:
+  #   KSU_REPO: KernelSU-Next/KernelSU-Next, KSU_DIR: KernelSU-Next, KSU_SETUP_REF: next, KSU_TAG: v3.4.0-legacy
   KSU_REPO: tiann/KernelSU
   KSU_DIR: KernelSU
   KSU_SETUP_REF: main
@@ -48,6 +50,20 @@ jobs:
         run: |
           set -e
           curl -LSs "https://raw.githubusercontent.com/${{ env.KSU_REPO }}/${{ env.KSU_SETUP_REF }}/kernel/setup.sh" | bash -s ${{ env.KSU_TAG }}
+
+      - name: Debug KernelSU setup result
+        working-directory: ./kernel
+        run: |
+          echo "=== top-level dirs matching KernelSU/kernelsu ==="
+          ls -la | grep -i kernelsu || echo "(none found)"
+          echo "=== drivers/kernelsu ==="
+          ls -la drivers/kernelsu 2>&1 || echo "(missing)"
+          echo "=== drivers/Kconfig: kernelsu lines ==="
+          grep -n -i kernelsu drivers/Kconfig || echo "(no reference)"
+          echo "=== drivers/Makefile: kernelsu lines ==="
+          grep -n -i kernelsu drivers/Makefile || echo "(no reference)"
+          echo "=== git status (uncommitted changes from setup script) ==="
+          git status --porcelain
 
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
