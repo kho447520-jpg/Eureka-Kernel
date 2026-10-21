@@ -1,4 +1,4 @@
-name: Test Build KernelSU-Next Only
+name: Add KernelSU-Next v3.3.0 to Kernel Sources (A10/A20/A30/A30s/A40)
 
 on:
   workflow_dispatch:
@@ -7,23 +7,34 @@ env:
   KERNEL_BRANCH: R24U
 
 jobs:
-  test-ksu-build:
+  add-ksu:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         defconfig:
           - exynos7885-a10_defconfig
+          - exynos7885-a20_defconfig
+          - exynos7885-a30_defconfig
+          - exynos7885-a30s_defconfig
+          - exynos7885-a40_defconfig
 
     steps:
       - name: Checkout kernel source
         uses: actions/checkout@v4
         with:
+          repository: kho447520-jpg/Eureka-Kernel
           ref: ${{ env.KERNEL_BRANCH }}
           path: kernel
           fetch-depth: 0
 
-      # 1. Thay thế curl bằng git clone trực tiếp nhánh legacy
+      - name: Set Git user
+        working-directory: ./kernel
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      # 1. Tải KernelSU-Next v3.3.0 (Legacy)
       - name: Setup KernelSUNext
         working-directory: ./kernel
         run: |
@@ -35,7 +46,6 @@ jobs:
           git checkout v3.3.0
           cd ..
           
-          # Kiểm tra xem đã có Makefile chưa
           if [ -f "KernelSU/Makefile" ] || [ -f "KernelSU/kernel/Makefile" ]; then
             echo "✅ Đã tải KernelSU-Next v3.3.0 (legacy) thành công!"
           else
@@ -44,6 +54,7 @@ jobs:
             exit 1
           fi
 
+      # 2. Cấu hình KSU vào defconfig của từng thiết bị
       - name: Enable KernelSU in defconfig
         working-directory: ./kernel
         run: |
@@ -54,61 +65,17 @@ jobs:
           echo "# CONFIG_KPROBES is not set" >> arch/arm64/configs/${{ matrix.defconfig }}
           echo "# CONFIG_HAVE_KPROBES is not set" >> arch/arm64/configs/${{ matrix.defconfig }}
           echo "# CONFIG_KPROBES_EVENTS is not set" >> arch/arm64/configs/${{ matrix.defconfig }}
+          tail -10 arch/arm64/configs/${{ matrix.defconfig }}
 
-      - name: Install build dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y bc bison flex libssl-dev make git python3 cpio gcc-aarch64-linux-gnu
-
-      - name: Setup Neutron Clang
-        run: |
-          mkdir -p toolchain
-          cd toolchain
-          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S=10032024
-          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") --patch=glibc
-          cd ..
-          echo "$(pwd)/toolchain/bin" >> $GITHUB_PATH
-
-      - name: Set environment
-        run: |
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "LD=ld.lld" >> $GITHUB_ENV
-          echo "AR=llvm-ar" >> $GITHUB_ENV
-          echo "NM=llvm-nm" >> $GITHUB_ENV
-          echo "OBJCOPY=llvm-objcopy" >> $GITHUB_ENV
-          echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
-          echo "STRIP=llvm-strip" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "ARCH=arm64" >> $GITHUB_ENV
-
-      - name: Configure kernel
+      # 3. Lưu thay đổi lại (nếu bạn muốn commit lên nhánh)
+      - name: Commit changes
         working-directory: ./kernel
         run: |
-          export PLATFORM_VERSION=11
-          make O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r ${{ matrix.defconfig }}
+          git add -A
+          git commit -m "Add KernelSU-Next v3.3.0 to ${{ matrix.defconfig }}"
+          # Bạn có thể push lên nhánh nếu cần:
+          # git push origin ${{ env.KERNEL_BRANCH }}
 
-      # 2. Thử build KernelSU
-      - name: Test Build KernelSU only
-        working-directory: ./kernel
+      - name: Done
         run: |
-          export PLATFORM_VERSION=11
-          make -j$(nproc) O=out ARCH=arm64 ANDROID_MAJOR_VERSION=r \
-            CC=${CC} LD=${LD} AR=${AR} NM=${NM} \
-            OBJCOPY=${OBJCOPY} OBJDUMP=${OBJDUMP} STRIP=${STRIP} \
-            CROSS_COMPILE=${CROSS_COMPILE} KernelSU/ 2>&1 | tee build.log || true
-          
-          echo "=== KẾT QUẢ BUILD KSU ==="
-          if [ -f out/KernelSU/kernel/ksu.o ] || [ -f out/kernel/KernelSU/kernel/ksu.o ]; then
-            echo "✅ KernelSU biên dịch thành công (tìm thấy file .o)"
-          else
-            echo "❌ KernelSU biên dịch thất bại (không tìm thấy file .o)"
-            echo "--- Chi tiết lỗi ---"
-            grep -i "error" build.log || true
-          fi
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-ksu-build-log
-          path: kernel/build.log
+          echo "✅ Đã thêm KernelSU-Next v3.3.0 vào source cho ${{ matrix.defconfig }}!"
