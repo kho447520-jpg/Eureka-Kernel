@@ -6,8 +6,8 @@ on:
     branches: [ R24U ]
 
 env:
-  KERNEL_BRANCH: R24U 
-  KSU_TAG: v3.3.1
+  KERNEL_BRANCH: R24U
+  KSU_TAG: v3.4.0-legacy
 
 jobs:
   build:
